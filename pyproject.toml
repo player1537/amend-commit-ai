@@ -1,20 +1,27 @@
 [project]
 name = "amend-commit-ai"
 version = "0.1"
-description = "null"
+description = "Amend git commits with AI conversation transcripts."
 readme = "README.md"
 requires-python = ">=3.10"
 authors = [{name = "Tanner Hobson"}]
 license = "Apache-2.0"
 classifiers = []
 dependencies = [
-
+    "click",
+    "mdformat",
+    "pyperclip",
+    "questionary",
+    "zstandard",
 ]
 
 [dependency-groups]
 dev = [
     "pytest"
 ]
+
+[project.scripts]
+amend-commit-ai = "amend_commit_ai.cli:main"
 
 [build-system]
 requires = ["setuptools"]
@@ -26,4 +33,3 @@ Homepage = "https://github.com/player1537/amend-commit-ai"
 Changelog = "https://github.com/player1537/amend-commit-ai/releases"
 Issues = "https://github.com/player1537/amend-commit-ai/issues"
 CI = "https://github.com/player1537/amend-commit-ai/actions"
-
