@@ -41,11 +41,14 @@ def _extract_text(content) -> str:
     return str(content).strip()
 
 
-def _parse_jsonl(path: Path) -> tuple[list[UserMessage], str, list[str]]:
-    """Return (user_messages, summary, models) from a Claude JSONL session."""
+def _parse_jsonl(
+    path: Path,
+) -> tuple[list[UserMessage], str, list[str], dict[str, str]]:
+    """Return (user_messages, summary, models, model_providers) from a Claude JSONL session."""
     messages: list[UserMessage] = []
     summary = ""
     models: set[str] = set()
+    model_providers: dict[str, str] = {}
     for line in path.read_text(encoding="utf-8").splitlines():
         line = line.strip()
         if not line:
@@ -58,13 +61,14 @@ def _parse_jsonl(path: Path) -> tuple[list[UserMessage], str, list[str]]:
         if obj.get("type") == "summary" and obj.get("summary"):
             summary = obj["summary"]
 
-        # Extract model from assistant messages
+        # Extract model from assistant messages; provider is always "claude"
         if obj.get("type") == "assistant":
             msg = obj.get("message", {})
             if isinstance(msg, dict) and msg.get("model"):
                 model = msg["model"]
                 if model != "<synthetic>":
                     models.add(model)
+                    model_providers.setdefault(model, "claude")
 
         if obj.get("type") != "user":
             continue
@@ -80,7 +84,7 @@ def _parse_jsonl(path: Path) -> tuple[list[UserMessage], str, list[str]]:
     if not summary and messages:
         summary = messages[0].text[:50]
 
-    return messages, summary, sorted(models)
+    return messages, summary, sorted(models), model_providers
 
 
 class ClaudeTranscript(Transcript):
@@ -110,12 +114,13 @@ class ClaudeTranscript(Transcript):
     @classmethod
     def _from_path(cls, path: Path) -> ClaudeTranscript:
         stat = path.stat()
-        user_messages, summary, models = _parse_jsonl(path)
+        user_messages, summary, models, model_providers = _parse_jsonl(path)
         return cls(
             name=path.stem,
             summary=summary,
             created=datetime.fromtimestamp(stat.st_ctime, tz=timezone.utc),
             modified=datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc),
             models=models,
+            model_providers=model_providers,
             user_messages=user_messages,
         )

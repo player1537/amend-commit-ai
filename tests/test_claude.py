@@ -75,11 +75,12 @@ class TestParseJsonl:
             path = Path(f.name)
 
         try:
-            messages, summary, models = _parse_jsonl(path)
+            messages, summary, models, model_providers = _parse_jsonl(path)
             assert len(messages) == 2
             assert messages[0].text == "hello"
             assert messages[1].text == "follow up"
             assert "claude-sonnet-4-20250514" in models
+            assert model_providers == {"claude-sonnet-4-20250514": "claude"}
             assert summary == "hello"
         finally:
             os.unlink(path)
@@ -96,7 +97,7 @@ class TestParseJsonl:
             path = Path(f.name)
 
         try:
-            messages, _, _ = _parse_jsonl(path)
+            messages, _, _, _ = _parse_jsonl(path)
             assert len(messages) == 1
             assert messages[0].text == "real"
         finally:
@@ -129,8 +130,9 @@ class TestParseJsonl:
             path = Path(f.name)
 
         try:
-            _, _, models = _parse_jsonl(path)
+            _, _, models, model_providers = _parse_jsonl(path)
             assert models == ["claude-sonnet-4-20250514"]
+            assert model_providers == {"claude-sonnet-4-20250514": "claude"}
         finally:
             os.unlink(path)
 
@@ -146,7 +148,7 @@ class TestParseJsonl:
             path = Path(f.name)
 
         try:
-            _, summary, _ = _parse_jsonl(path)
+            _, summary, _, _ = _parse_jsonl(path)
             assert summary == "My session summary"
         finally:
             os.unlink(path)
@@ -191,6 +193,7 @@ class TestClaudeTranscriptRead:
                 assert len(t.user_messages) == 1
                 assert t.user_messages[0].text == "hello"
                 assert "claude-sonnet-4-20250514" in t.models
+                assert t.model_providers == {"claude-sonnet-4-20250514": "claude"}
                 assert t.created.tzinfo == timezone.utc
 
                 # read by name

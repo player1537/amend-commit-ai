@@ -57,14 +57,47 @@ def _pick_transcript(transcripts: list[Transcript]) -> Transcript | None:
     return questionary.select("Select a transcript:", choices=choices).ask()
 
 
-def _build_amend_command(transcript_text: str) -> str:
+def _format_co_authored_by_trailers(model_providers: dict[str, str]) -> list[str]:
+    """Generate Co-Authored-By trailer strings from model->provider mapping.
+
+    Returns a list of trailer strings such as:
+        Co-Authored-By: claude-fable-5 <noreply@claude.invalid>
+        Co-Authored-By: kimi-k2.5 <noreply@nebula.invalid>
+    """
+    trailers: list[str] = []
+    for model in sorted(model_providers):
+        provider = model_providers[model]
+        if provider:
+            trailers.append(f"Co-Authored-By: {model} <noreply@{provider}.invalid>")
+        else:
+            trailers.append(f"Co-Authored-By: {model}")
+    return trailers
+
+
+_DEFAULT_TRAILER = "Co-Authored-By: AI Assistant"
+
+
+_EMPTY_PROVIDERS: dict[str, str] = {}
+
+
+def _build_amend_command(
+    transcript_text: str, model_providers: dict[str, str] | None = None
+) -> str:
     """Build a shell command string that amends the current commit."""
     suffix = shlex.quote(f"\n\n=== Transcript\n\n{transcript_text}")
+    cmd = f' git commit --amend -m "$(git log -1 --pretty=%B)"{suffix}'
+    trailers = _format_co_authored_by_trailers(model_providers or _EMPTY_PROVIDERS)
+    if not trailers:
+        trailers = [_DEFAULT_TRAILER]
+    for trailer in trailers:
+        cmd += f" --trailer {shlex.quote(trailer)}"
     # Leading space prevents bash history recording
-    return f' git commit --amend -m "$(git log -1 --pretty=%B)"{suffix}'
+    return cmd
 
 
-def _amend_commit(transcript_text: str) -> None:
+def _amend_commit(
+    transcript_text: str, model_providers: dict[str, str] | None = None
+) -> None:
     """Directly amend the current git commit with the transcript."""
     result = subprocess.run(
         ["git", "log", "-1", "--format=%B"],
@@ -98,6 +131,13 @@ def _amend_commit(transcript_text: str) -> None:
     new_message = f"{body}\n\n=== Transcript\n\n{transcript_text}"
     if trailers:
         new_message = f"{new_message}\n\n{trailers}"
+
+    # Add Co-Authored-By trailers
+    co_authored = _format_co_authored_by_trailers(model_providers or _EMPTY_PROVIDERS)
+    if not co_authored:
+        co_authored = [_DEFAULT_TRAILER]
+    for trailer in co_authored:
+        new_message = f"{new_message}\n{trailer}"
 
     subprocess.run(
         ["git", "commit", "--amend", "-F", "-"],
@@ -146,9 +186,9 @@ def main(
         return
 
     if doit:
-        _amend_commit(transcript_text)
+        _amend_commit(transcript_text, selected.model_providers)
     else:
-        cmd = _build_amend_command(transcript_text)
+        cmd = _build_amend_command(transcript_text, selected.model_providers)
         pyperclip.copy(cmd)
         click.echo(cmd)
         click.echo("\n(copied to clipboard)", err=True)

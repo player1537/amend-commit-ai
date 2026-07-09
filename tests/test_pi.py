@@ -52,12 +52,13 @@ class TestParseJsonl:
             path = Path(f.name)
 
         try:
-            messages, summary, models = _parse_jsonl(path)
+            messages, summary, models, model_providers = _parse_jsonl(path)
             assert len(messages) == 2
             assert messages[0].text == "hello"
             assert messages[1].text == "thanks"
             assert summary == "hello"
             assert models == ["pi-3"]
+            assert model_providers == {}
         finally:
             os.unlink(path)
 
@@ -76,7 +77,7 @@ class TestParseJsonl:
             path = Path(f.name)
 
         try:
-            messages, _, _ = _parse_jsonl(path)
+            messages, _, _, _ = _parse_jsonl(path)
             assert len(messages) == 1
             assert messages[0].text == "real"
         finally:
@@ -99,7 +100,7 @@ class TestParseJsonl:
             path = Path(f.name)
 
         try:
-            messages, _, _ = _parse_jsonl(path)
+            messages, _, _, _ = _parse_jsonl(path)
             assert len(messages) == 1
             assert messages[0].text == "multi block"
         finally:
@@ -140,6 +141,7 @@ class TestPiTranscriptRead:
                 assert len(t.user_messages) == 1
                 assert t.user_messages[0].text == "hello"
                 assert t.models == ["pi-3"]
+                assert t.model_providers == {}
                 assert t.created.tzinfo == timezone.utc
 
                 t2 = PiTranscript.read("my-session")

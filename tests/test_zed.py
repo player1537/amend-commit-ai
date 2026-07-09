@@ -97,15 +97,21 @@ class TestExtractModels:
         data = _make_thread_data(
             model={"provider": "openrouter", "model": "anthropic/claude-opus-4"}
         )
-        assert _extract_models(data) == ["anthropic/claude-opus-4"]
+        models, model_providers = _extract_models(data)
+        assert models == ["anthropic/claude-opus-4"]
+        assert model_providers == {"anthropic/claude-opus-4": "openrouter"}
 
     def test_string_model(self):
         data = _make_thread_data(model="some-model")
-        assert _extract_models(data) == ["some-model"]
+        models, model_providers = _extract_models(data)
+        assert models == ["some-model"]
+        assert model_providers == {}
 
     def test_none_model(self):
         data = _make_thread_data(model=None)
-        assert _extract_models(data) == []
+        models, model_providers = _extract_models(data)
+        assert models == []
+        assert model_providers == {}
 
 
 class TestDecompress:
@@ -182,6 +188,7 @@ class TestZedTranscriptRead:
                 assert len(t.user_messages) == 1
                 assert t.user_messages[0].text == "hello from zed"
                 assert t.models == ["test-model-1"]
+                assert t.model_providers == {"test-model-1": "test"}
 
                 # read by name
                 t2 = ZedTranscript.read("thread-001")

@@ -35,6 +35,7 @@ class Transcript:
     created: datetime
     modified: datetime
     models: list[str] = field(default_factory=list)
+    model_providers: dict[str, str] = field(default_factory=dict)
     user_messages: list[UserMessage] = field(default_factory=list)
 
     @classmethod

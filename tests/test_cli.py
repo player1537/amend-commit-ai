@@ -5,7 +5,12 @@ from unittest import mock
 
 from click.testing import CliRunner
 
-from amend_commit_ai.cli import _build_amend_command, _collect_transcripts, main
+from amend_commit_ai.cli import (
+    _build_amend_command,
+    _collect_transcripts,
+    _format_co_authored_by_trailers,
+    main,
+)
 from amend_commit_ai.transcript import Transcript, UserMessage
 
 
@@ -16,6 +21,7 @@ def _make_transcript(name="t", summary="summary", **kwargs):
         created=datetime(2025, 1, 1, tzinfo=timezone.utc),
         modified=datetime(2025, 1, 2, tzinfo=timezone.utc),
         models=["test-model"],
+        model_providers={"test-model": "test-provider"},
         user_messages=[UserMessage(text="hello")],
     )
     defaults.update(kwargs)
@@ -24,19 +30,47 @@ def _make_transcript(name="t", summary="summary", **kwargs):
 
 class TestBuildAmendCommand:
     def test_produces_git_command(self):
-        cmd = _build_amend_command("test transcript")
+        cmd = _build_amend_command("test transcript", model_providers={"m": "p"})
         assert "git commit --amend" in cmd
         assert "=== Transcript" in cmd
         assert "test transcript" in cmd
 
     def test_leading_space(self):
-        cmd = _build_amend_command("x")
+        cmd = _build_amend_command("x", model_providers={"m": "p"})
         assert cmd.startswith(" ")
 
     def test_preserves_newlines(self):
-        cmd = _build_amend_command("line1\nline2")
+        cmd = _build_amend_command("line1\nline2", model_providers={"m": "p"})
         assert "line1" in cmd
         assert "line2" in cmd
+
+    def test_includes_co_authored_by_trailer(self):
+        cmd = _build_amend_command(
+            "test", model_providers={"claude-sonnet-4-20250514": "anthropic"}
+        )
+        assert "--trailer" in cmd
+        assert "Co-Authored-By: claude-sonnet-4-20250514" in cmd
+        assert "noreply@anthropic.invalid" in cmd
+
+    def test_includes_multiple_co_authored_by_trailers(self):
+        cmd = _build_amend_command(
+            "test", model_providers={"model-a": "provider-a", "model-b": "provider-b"}
+        )
+        assert "--trailer" in cmd
+        assert "Co-Authored-By: model-a" in cmd
+        assert "Co-Authored-By: model-b" in cmd
+        assert "noreply@provider-a.invalid" in cmd
+        assert "noreply@provider-b.invalid" in cmd
+
+    def test_default_trailer_when_no_providers(self):
+        cmd = _build_amend_command("test")
+        assert "--trailer" in cmd
+        assert "Co-Authored-By: AI Assistant" in cmd
+
+    def test_default_trailer_when_empty_providers(self):
+        cmd = _build_amend_command("test", model_providers={})
+        assert "--trailer" in cmd
+        assert "Co-Authored-By: AI Assistant" in cmd
 
 
 class TestCollectTranscripts:
@@ -107,7 +141,52 @@ class TestCollectTranscripts:
         assert transcripts[0].name == "new"
 
 
-class TestMainCli:
+class TestCoAuthoredByTrailers:
+    def test_single_model(self):
+        result = _format_co_authored_by_trailers(
+            {"claude-sonnet-4-20250514": "anthropic"}
+        )
+        assert result == [
+            "Co-Authored-By: claude-sonnet-4-20250514 <noreply@anthropic.invalid>"
+        ]
+
+    def test_multiple_models_sorted(self):
+        result = _format_co_authored_by_trailers(
+            {"zed": "zed-ai", "claude": "anthropic"}
+        )
+        assert result == [
+            "Co-Authored-By: claude <noreply@anthropic.invalid>",
+            "Co-Authored-By: zed <noreply@zed-ai.invalid>",
+        ]
+
+    def test_empty_providers(self):
+        result = _format_co_authored_by_trailers({})
+        assert result == []
+
+    def test_model_without_provider(self):
+        result = _format_co_authored_by_trailers({"some-model": ""})
+        assert result == ["Co-Authored-By: some-model"]
+
+
+class TestAmendCommit:
+    def test_passes_models_to_amend(self):
+        t = _make_transcript(model_providers={"claude-sonnet-4-20250514": "anthropic"})
+        runner = CliRunner()
+
+        with mock.patch("amend_commit_ai.cli._collect_transcripts", return_value=[t]):
+            with mock.patch("amend_commit_ai.cli._pick_transcript", return_value=t):
+                with mock.patch("amend_commit_ai.cli.subprocess.run") as mock_run:
+                    mock_run.return_value = mock.MagicMock(
+                        stdout="original commit message"
+                    )
+                    result = runner.invoke(main, ["--doit"])
+                    assert result.exit_code == 0
+                    # Check that the new message includes Co-Authored-By
+                    call_kwargs = mock_run.call_args_list[-1].kwargs
+                    input_msg = call_kwargs["input"]
+                    assert "Co-Authored-By: claude-sonnet-4-20250514" in input_msg
+                    assert "noreply@anthropic.invalid" in input_msg
+
     def test_print_only(self):
         t = _make_transcript()
         runner = CliRunner()

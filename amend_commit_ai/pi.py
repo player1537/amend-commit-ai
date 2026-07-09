@@ -24,11 +24,14 @@ def _extract_text(content) -> str:
     return str(content).strip()
 
 
-def _parse_jsonl(path: Path) -> tuple[list[UserMessage], str, list[str]]:
-    """Return (user_messages, summary, models) from a Pi JSONL session."""
+def _parse_jsonl(
+    path: Path,
+) -> tuple[list[UserMessage], str, list[str], dict[str, str]]:
+    """Return (user_messages, summary, models, model_providers) from a Pi JSONL session."""
     messages: list[UserMessage] = []
     summary = ""
     models: set[str] = set()
+    model_providers: dict[str, str] = {}
     for line in path.read_text(encoding="utf-8").splitlines():
         line = line.strip()
         if not line:
@@ -41,9 +44,12 @@ def _parse_jsonl(path: Path) -> tuple[list[UserMessage], str, list[str]]:
             continue
         msg = obj.get("message", {})
 
-        # Extract model from assistant messages
+        # Extract model and provider from assistant messages
         if msg.get("role") == "assistant" and msg.get("model"):
             models.add(msg["model"])
+            provider = msg.get("provider", "")
+            if provider:
+                model_providers.setdefault(msg["model"], provider)
 
         if msg.get("role") != "user":
             continue
@@ -54,7 +60,7 @@ def _parse_jsonl(path: Path) -> tuple[list[UserMessage], str, list[str]]:
     if messages:
         summary = messages[0].text[:50]
 
-    return messages, summary, sorted(models)
+    return messages, summary, sorted(models), model_providers
 
 
 class PiTranscript(Transcript):
@@ -81,12 +87,13 @@ class PiTranscript(Transcript):
     @classmethod
     def _from_path(cls, path: Path) -> PiTranscript:
         stat = path.stat()
-        user_messages, summary, models = _parse_jsonl(path)
+        user_messages, summary, models, model_providers = _parse_jsonl(path)
         return cls(
             name=path.stem,
             summary=summary,
             created=datetime.fromtimestamp(stat.st_ctime, tz=timezone.utc),
             modified=datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc),
             models=models,
+            model_providers=model_providers,
             user_messages=user_messages,
         )

@@ -12,6 +12,7 @@ def _make_transcript(**kwargs):
         created=datetime(2025, 1, 1, tzinfo=timezone.utc),
         modified=datetime(2025, 1, 2, tzinfo=timezone.utc),
         models=["test-model"],
+        model_providers={"test-model": "test-provider"},
         user_messages=[],
     )
     defaults.update(kwargs)
@@ -30,6 +31,7 @@ class TestTranscript:
         assert t.name == "test"
         assert t.summary == "test transcript"
         assert t.models == ["test-model"]
+        assert t.model_providers == {"test-model": "test-provider"}
         assert t.user_messages == []
 
     def test_read_raises(self):
@@ -79,6 +81,7 @@ class TestTranscript:
             modified=datetime(2025, 1, 1, tzinfo=timezone.utc),
         )
         assert t.models == []
+        assert t.model_providers == {}
         assert t.user_messages == []
 
 

@@ -61,15 +61,24 @@ def _extract_user_messages(thread_data: dict) -> list[UserMessage]:
     return messages
 
 
-def _extract_models(thread_data: dict) -> list[str]:
-    """Extract model identifiers from a Zed thread."""
+def _extract_models(thread_data: dict) -> tuple[list[str], dict[str, str]]:
+    """Extract model identifiers and providers from a Zed thread.
+
+    Returns (sorted_models, model_providers).
+    """
     models: set[str] = set()
+    model_providers: dict[str, str] = {}
     model_info = thread_data.get("model")
-    if isinstance(model_info, dict) and model_info.get("model"):
-        models.add(model_info["model"])
+    if isinstance(model_info, dict):
+        model = model_info.get("model", "")
+        if model:
+            models.add(model)
+            provider = model_info.get("provider", "")
+            if provider:
+                model_providers[model] = provider
     elif isinstance(model_info, str) and model_info:
         models.add(model_info)
-    return sorted(models)
+    return sorted(models), model_providers
 
 
 def _parse_timestamp(ts: str | None) -> datetime:
@@ -114,12 +123,13 @@ class ZedTranscript(Transcript):
         thread_id, summary, created_at, updated_at, data_type, data = row
         thread_data = _decompress(data_type, data)
         user_messages = _extract_user_messages(thread_data)
-        models = _extract_models(thread_data)
+        models, model_providers = _extract_models(thread_data)
         return cls(
             name=thread_id,
             summary=summary or "(no title)",
             created=_parse_timestamp(created_at),
             modified=_parse_timestamp(updated_at),
             models=models,
+            model_providers=model_providers,
             user_messages=user_messages,
         )
