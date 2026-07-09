@@ -1,6 +1,6 @@
 [project]
 name = "amend-commit-ai"
-version = "0.1"
+version = "0.2"
 description = "Amend git commits with AI conversation transcripts."
 readme = "README.md"
 requires-python = ">=3.10"
